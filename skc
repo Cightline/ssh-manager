@@ -1,12 +1,10 @@
 ---
 
-stealth:
-    type: id_rsa.pub
-    targets:
-        - admin@192.168.0.100
     
 admin:
     type: id_rsa.pub
     targets:
         - admin@192.168.0.100
-
+    
+    store_key: True
+    overwrite: True
