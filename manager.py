@@ -44,9 +44,10 @@ class Manager():
         total_users = len(self.config.keys())
 
         for user in self.config.keys():
+            username, hostname = user.split('@')
 
             key_type = self.config[user]['type']
-            target_key_path = '%s/%s/%s' % (self.config_path, user, key_type)
+            target_key_path = '/%s/%s/%s/%s' % (self.config_path, hostname, username, key_type)
 
             if os.path.exists(target_key_path):
                 for target in self.config[user]['targets']:
@@ -72,11 +73,18 @@ class Manager():
                 # prompt to generate or autogen if config says so
 
 
-            if 'store_key' in self.config[user]:
-                self.get_public_key(info[0], info[1], key_type)
                 
+            if 'store_key' in self.config[user]:
 
-    def get_public_key(self, username, hostname, key_type):
+                if 'overwrite' in self.config[user]:
+                    self.get_public_key(info[0], info[1], key_type, overwrite=True)
+               
+                else:
+                    self.get_public_key(info[0], info[1], key_type)
+
+
+
+    def get_public_key(self, username, hostname, key_type, overwrite=False):
         if not self.client:
             self.connect(username, hostname)
 
@@ -94,7 +102,7 @@ class Manager():
         pub_key = f.read()
         f.close()
 
-        self.save_public_key(username, hostname, key_type, pub_key)
+        self.save_public_key(username, hostname, key_type, pub_key, overwrite)
    
 
 
