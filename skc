@@ -5,6 +5,7 @@ admin@192.168.0.100:
     type: id_rsa.pub
     targets:
         - admin@192.168.0.100
+        - admin@aware.skynet-systems.net
     
     store_key: True
     overwrite: True

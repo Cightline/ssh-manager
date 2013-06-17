@@ -8,17 +8,17 @@ import yaml
 
 
 class Manager():
-    def __init__(self, ssh_pass=None, overwrite=False, sudo_pass=None):
+    def __init__(self, ssh_pass=None, overwrite=False, ignore_host_keys=False):
         paramiko.util.log_to_file('ssh_manager_sftp.log')
         self.client    = None
         self.transport = None
         self.config    = None
         self.ssh_pass  = ssh_pass
-        self.sudo_pass = sudo_pass
         self.overwrite = overwrite
+        self.host_keys_path   = os.path.expanduser('~/.ssh/known_hosts')
+        self.ignore_host_keys = ignore_host_keys
         self.config_path = '/home/stealth/programming/ssh_manager'
        
-
 
     def run(self):
         self.read_config(self.config_path)
@@ -51,7 +51,7 @@ class Manager():
 
             if os.path.exists(target_key_path):
                 for target in self.config[user]['targets']:
-                    self.msg('checking for key')
+                    self.msg('checking for local key from: %s' % (target))
 
                     info = target.split('@')
                   
@@ -85,6 +85,7 @@ class Manager():
 
 
     def get_public_key(self, username, hostname, key_type, overwrite=False):
+        self.msg('attempting to store %s' % (key_type))
         if not self.client:
             self.connect(username, hostname)
 
@@ -94,9 +95,9 @@ class Manager():
         except IOError as e:
             # File does not exist
             if e.errno == 2:
-                self.msg(1, 'key type: %s does not exist on host' % (key_type))
+                self.msg('key type: %s does not exist on %s' % (key_type, hostname), 1)
 
-
+                return False
     
         f = self.sftp.file('/home/%s/.ssh/%s' % (username, key_type), 'r')
         pub_key = f.read()
@@ -123,7 +124,7 @@ class Manager():
         # Otherwise we should save the key 
         with open('%s/%s/%s/%s' % (self.config_path, hostname, username, key_type), 'w') as to_write:
             to_write.write(key_contents)
-            self.msg('saving public key from %s type %s' % (username, key_type), 0)
+            self.msg('saving public key on %s type %s' % (username, key_type), 0)
             
          
 
@@ -135,8 +136,7 @@ class Manager():
         
 
     def key_present(self, username, hostname, target_key):
-        if not self.client:
-            self.connect(username, hostname)
+        self.connect(username, hostname)
 
         try:
             self.sftp.stat('/home/%s/.ssh/authorized_keys' % (username))
@@ -158,7 +158,7 @@ class Manager():
         for key in keys:
 
             if target_key.strip() == key.strip():
-                self.msg("key exists")
+                self.msg("user: %s, host: %s authorized_keys contains correct key" % (username, hostname))
                 return True
 
 
@@ -167,24 +167,42 @@ class Manager():
 
     def connect(self, username, hostname, port=22, password=None, allow_agent=True):
         self.client = paramiko.SSHClient()
-        self.client.load_system_host_keys()
+        self.msg('loading host keys from: %s' % (self.host_keys_path))
+        self.client.load_host_keys(self.host_keys_path)
+        self.client.set_missing_host_key_policy(self)
+        
       
-        print "connecting to %s as %s" % (hostname, username)
+        self.msg("connecting to %s as %s" % (hostname, username), 0)
 
 
         # Use self.ssh_pass if no password was given 
         if password == None and self.ssh_pass != None:
             password = self.ssh_pass
-        
-        self.client.connect(username=username, hostname=hostname, password=password)
+       
+        try:
+            self.client.connect(username=username, hostname=hostname, password=password)
+
+        except paramiko.SSHException as e:
+            self.msg(e, 2)
+            exit()
+            
         
 
         self.transport = self.client.get_transport()
         
         self.sftp = self.client.open_sftp()
 
+    def missing_host_key(self, client, hostname, key):
+        self.msg('could not verify host key from: %s, self.ignore_host_keys == %s' % (hostname, self.ignore_host_keys))
 
-        
+        if self.ignore_host_keys == True:
+            return 
+
+        elif raw_input('continue [y/n]: ') == 'yes' or 'y':
+            return
+
+        else:
+            exit()
 
 
 # generate the key for the remote system, don't keep locally (leave it on remote system)
